@@ -1,5 +1,7 @@
 # ARGUS OSINT Studio 1.0
 
+Aktualizacja 1.0.2: generowane raporty PDF i ich podgląd nie zawierają oznaczeń ARGUS. Okładka ma neutralny nagłówek „RAPORT OSINT”. Usunięto nazwę aplikacji z nagłówków, metadanych PDF i nazw eksportowanych raportów. Autora wpisujesz w ustawieniach projektu, np. własny pseudonim. Format kopii projektów pozostaje zgodny z wcześniejszą wersją. Po aktualizacji plików zamknij wszystkie okna aplikacji i otwórz stronę ponownie; nie czyść danych witryny.
+
 Polska, lokalna aplikacja PWA do dokumentowania dochodzeń i tworzenia raportów PDF. Nie wymaga konta, kluczy API, kompilowania ani serwera aplikacyjnego.
 
 ## Publikacja na GitHub Pages

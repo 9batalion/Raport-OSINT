@@ -199,7 +199,7 @@ export async function makePDF(p) {
     height: 210,
     color: navy,
   });
-  page.drawText("ARGUS / OSINT STUDIO", {
+  page.drawText("RAPORT OSINT", {
     x: left,
     y: height - 66,
     font: heavy,
@@ -440,7 +440,7 @@ export async function makePDF(p) {
   const pages = doc.getPages();
   pages.forEach((pg, i) => {
     if (i > 0) {
-      pg.drawText("ARGUS / " + clean(p.classification), {
+      pg.drawText(clean(p.classification), {
         x: left,
         y: height - 31,
         size: 8,
@@ -478,7 +478,7 @@ export async function makePDF(p) {
   doc.setTitle(p.title);
   doc.setAuthor(p.author || "");
   doc.setSubject("Raport OSINT — " + p.classification);
-  doc.setCreator("ARGUS OSINT Studio");
-  doc.setProducer("ARGUS / pdf-lib");
+  doc.setCreator("Generator raportów OSINT");
+  doc.setProducer("pdf-lib");
   return doc.save();
 }

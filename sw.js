@@ -1,4 +1,4 @@
-const CACHE = "argus-shell-v1.0.1-flat";
+const CACHE = "argus-shell-v1.0.2-neutral-report";
 const FILES = [
   "./",
   "./index.html",

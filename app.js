@@ -483,7 +483,7 @@ function sectionForm(id) {
   };
 }
 function preview(p) {
-  return `<article class="paper"><small>ARGUS / ${esc(p.classification)} / ${new Date().toLocaleDateString("pl-PL")}</small><h1 style="margin-top:25px">${esc(p.title)}</h1><p>${esc(p.report.template)} · ${esc(p.author || "Autor nieokreślony")}</p><hr>${[
+  return `<article class="paper"><small>${esc(p.classification)} / ${new Date().toLocaleDateString("pl-PL")}</small><h1 style="margin-top:25px">${esc(p.title)}</h1><p>${esc(p.report.template)} · ${esc(p.author || "Autor nieokreślony")}</p><hr>${[
     ["Streszczenie", p.report.summary],
     ["Cel badania", p.goal],
     ["Pytania badawcze", p.questions],
@@ -527,7 +527,7 @@ function pdfOptions() {
       const bytes = await makePDF(exported);
       const hash = await sha256(bytes);
       const name =
-        "ARGUS-" +
+        "Raport-OSINT-" +
         p.title
           .replace(/[^a-zA-Z0-9ąęćłńóśźżĄĘĆŁŃÓŚŹŻ_-]+/g, "-")
           .slice(0, 65) +
@@ -537,7 +537,7 @@ function pdfOptions() {
       download(
         JSON.stringify(
           {
-            format: "ARGUS-MANIFEST",
+            format: "OSINT-REPORT-MANIFEST",
             version: 1,
             title: exported.title,
             exported: now(),
@@ -1004,7 +1004,7 @@ document.addEventListener("click", async (e) => {
     }
     if (action === "redact") return await redact(id);
     if (action === "graph-download")
-      return download(graphSVG(p), "ARGUS-powiazania.svg", "image/svg+xml");
+      return download(graphSVG(p), "powiazania.svg", "image/svg+xml");
     if (action === "preview-report") {
       show(
         '<h2>Podgląd treści głównych</h2><p class="muted">Pełny PDF zawiera również rejestry, graf i wykaz materiałów zgodnie z wybranym szablonem.</p>' +
