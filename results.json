@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "pdfPages": 9,
+  "pdfBytes": 97399,
+  "tested": [
+    "IndexedDB transactions (fake-indexeddb)",
+    "state persistence read/write",
+    "encrypted export/import",
+    "wrong password rejection",
+    "tamper rejection",
+    "public filtering and references",
+    "SHA-256 vector",
+    "dangling-reference checks",
+    "URL/HTML escaping",
+    "multi-page PDF with embedded fonts and real images",
+    "graph rasterization",
+    "PDF URL annotations",
+    "service-worker asset existence",
+    "DOM startup and navigation (jsdom)",
+    "source creation form (jsdom)",
+    "report editing persistence (jsdom)"
+  ],
+  "notTested": [
+    "real browser interactions",
+    "actual PWA installation",
+    "actual offline service-worker execution",
+    "iOS Safari",
+    "image redaction pointer interaction"
+  ]
+}
