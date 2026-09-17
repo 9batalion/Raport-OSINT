@@ -25,6 +25,9 @@ import {
   publicProject,
 } from "./core.js";
 import { makePDF, graphSVG } from "./report.js";
+import { makeODT, ODT_MIME } from "./odt.js";
+import { PROJECT_DEFAULTS, REPORT_FIELDS, fillReportDefaults, CUSTOM_DEFAULT } from "./report-defaults.js";
+import { FRAUD_PRESETS, presetContent, applyFraudPreset } from "./fraud-presets.js";
 let db,
   state,
   view = "overview",
@@ -327,7 +330,7 @@ function formRecord(key, id) {
 function projectForm(edit = false) {
   const p = edit ? project() : newProject("");
   show(
-    `<form id="project-form"><h2>${edit ? "Ustawienia projektu" : "Nowy projekt"}</h2>${field("title", "Nazwa projektu", "text", p.title, true)}${field("author", "Autor raportu", "text", p.author)}${field("goal", "Cel badania", "textarea", p.goal)}${field("questions", "Pytania badawcze", "textarea", p.questions)}${field("scope", "Zakres i granice analizy", "textarea", p.scope)}${select("classification", "Oznaczenie raportu", ["Roboczy", "Wewnętrzny", "Publiczny"], p.classification)}${formFooter(edit ? "Zapisz" : "Utwórz projekt")}</form>`,
+    `<form id="project-form"><h2>${edit ? "Ustawienia projektu" : "Nowy projekt"}</h2>${field("title", "Nazwa projektu", "text", p.title, true)}${field("author", "Autor raportu", "text", p.author)}${field("caseNumber", "Numer sprawy / sygnatura", "text", p.caseNumber)}${field("reportDate", "Data i miejsce sporządzenia", "text", p.reportDate)}${field("period", "Okres objęty raportem", "text", p.period)}${field("reportVersion", "Wersja raportu", "text", p.reportVersion || "1.0")}${field("goal", "Cel badania", "textarea", p.goal)}${field("questions", "Pytania badawcze", "textarea", p.questions)}${field("scope", "Zakres i granice analizy", "textarea", p.scope)}${select("classification", "Oznaczenie raportu", ["Roboczy", "Wewnętrzny", "Publiczny"], p.classification)}${formFooter(edit ? "Zapisz" : "Utwórz projekt")}</form>`,
   );
   $("#project-form").onsubmit = async (e) => {
     e.preventDefault();
@@ -431,29 +434,43 @@ function reportEditor(p) {
       "Raport analityczny",
       "Edytuj treść. Rejestry zostaną dołączone automatycznie.",
       btn("preview-report", "Podgląd") +
-        btn("pdf-options", "Generuj PDF", "primary"),
+        btn("fraud-preset", "Presety oszustw (20)") +
+        btn("pdf-options", "Generuj PDF / ODT", "primary"),
     ) +
-    `<section class="card"><div class="grid2">${select("template", "Szablon raportu", ["Raport pełny OSINT", "Raport skrócony", "Profil osoby", "Profil firmy", "Analiza domeny", "Analiza powiązań", "Notatka analityczna"], p.report.template)}<div class="notice">Treści zapisują się po zmianie pola. Oznaczenie „publiczny” nie anonimizuje automatycznie nazw w opisach.</div></div>${[
-      ["summary", "Streszczenie"],
-      ["method", "Metodologia"],
-      ["conclusions", "Wnioski"],
-      ["limitations", "Ograniczenia analizy"],
-    ]
+    `<section class="card"><p class="muted">Tekst wyjściowy jest wzorem do opracowania. Uzupełnij fragmenty w nawiasach kwadratowych i usuń zbędne wskazówki przed eksportem. Wprowadzenia do rozdziałów pojawią się przed wpisami z rejestrów.</p>${btn("fill-report-defaults", "Uzupełnij puste pola wzorem")}<div class="grid2">${select("template", "Szablon raportu", ["Raport uniwersalny", "Raport pełny OSINT", "Raport skrócony", "Profil osoby", "Profil firmy", "Analiza domeny", "Analiza powiązań", "Notatka analityczna"], p.report.template)}<div class="notice">Treści zapisują się po zmianie pola. Oznaczenie „publiczny” nie anonimizuje automatycznie nazw w opisach.</div></div>${REPORT_FIELDS
       .map(
         ([k, l]) =>
-          `<div class="section-editor">${field(k, l, "textarea", p.report[k])}</div>`,
+          `<div class="section-editor">${field(k, l, "textarea", (Object.hasOwn(PROJECT_DEFAULTS, k) ? p[k] : p.report[k]))}</div>`,
       )
       .join(
         "",
       )}<label class="check"><input id="includeGraph" type="checkbox" ${p.report.includeGraph ? "checked" : ""}>Dołącz graf powiązań</label><label class="check"><input id="includeImages" type="checkbox" ${p.report.includeImages ? "checked" : ""}>Dołącz obrazy z magazynu materiałów</label></section><section class="card"><div class="card-head"><h2>Własne rozdziały</h2>${btn("add-section", "+ Rozdział")}</div><p class="muted">Rozdziały pojawią się po części analitycznej, przed wykazem źródeł.</p>${p.report.sections.map((s, i) => `<article class="record"><div class="card-head"><h3>${esc(s.title)}</h3>${s.private ? badge("WEWNĘTRZNY", "warn") : ""}</div><p>${esc(s.text)}</p><small>${esc(refNames(p, "sources", s.sources))}</small><div class="actions">${btn("edit-section", "Edytuj", "", `data-id="${s.id}"`)}${btn("section-up", "↑", "", `aria-label="Rozdział w górę" data-id="${s.id}" ${i === 0 ? "disabled" : ""}`)}${btn("section-down", "↓", "", `aria-label="Rozdział w dół" data-id="${s.id}" ${i === p.report.sections.length - 1 ? "disabled" : ""}`)}${btn("delete-section", "Usuń", "danger", `data-id="${s.id}"`)}</div></article>`).join("")}</section>`
   );
 }
+function fraudPresetForm(p) {
+  show(`<form id="fraud-preset-form"><h2>Preset analizy oszustwa</h2><p>Wybierz scenariusz jako punkt wyjścia. Preset uzupełni puste pola i zastąpi niezmieniony tekst wzoru lub poprzedniego presetu. Twoje własne opisy i rejestry pozostaną zachowane.</p><label>Typ scenariusza<select id="fraud-preset-id">${FRAUD_PRESETS.map(x=>`<option value="${x.id}" ${p.report.preset===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label><div id="fraud-preset-preview" class="card"></div>${formFooter("Zastosuj preset")}</form>`);
+  const picker=$("#fraud-preset-id");
+  const preview=()=>{
+    const x=FRAUD_PRESETS.find(x=>x.id===picker.value), content=presetContent(x.id);
+    $("#fraud-preset-preview").innerHTML=`<h3>${esc(x.name)}</h3><p>${esc(content.project.goal)}</p><h4>Pytania do wyjaśnienia</h4><ul>${x.questions.map(q=>`<li>${esc(q)}</li>`).join('')}</ul><h4>Materiały do sprawdzenia</h4><ul>${x.materials.map(q=>`<li>${esc(q)}</li>`).join('')}</ul><p>Alternatywy: ${esc(x.alternative)}.</p>`;
+  };
+  picker.onchange=preview; preview();
+  $("#fraud-preset-form").onsubmit=async e=>{
+    e.preventDefault();
+    try {
+      const result=applyFraudPreset(p,picker.value);
+      await persist("Zastosowano preset: "+picker.value);
+      close(); render();
+      toast(`Zmieniono ${result.changed} pól. Zachowano ${result.preserved} własnych opisów.`);
+    } catch(e) { error(e); }
+  };
+}
 function sectionForm(id) {
   const p = project(),
     s = p.report.sections.find((x) => x.id === id) || {
       id: uid(),
-      title: "",
-      text: "",
+      title: CUSTOM_DEFAULT.title,
+      text: CUSTOM_DEFAULT.text,
       sources: [],
     };
   show(
@@ -482,40 +499,15 @@ function sectionForm(id) {
     render();
   };
 }
-function preview(p) {
-  return `<article class="paper"><small>${esc(p.classification)} / ${new Date().toLocaleDateString("pl-PL")}</small><h1 style="margin-top:25px">${esc(p.title)}</h1><p>${esc(p.report.template)} · ${esc(p.author || "Autor nieokreślony")}</p><hr>${[
-    ["Streszczenie", p.report.summary],
-    ["Cel badania", p.goal],
-    ["Pytania badawcze", p.questions],
-    ["Zakres", p.scope],
-    ["Metodologia", p.report.method],
-  ]
-    .map(([t, v]) => (v ? `<h2>${t}</h2><p>${esc(v)}</p>` : ""))
-    .join("")}<h2>Ustalenia</h2>${active(p, "findings")
-    .map(
-      (r) =>
-        `<h3>${esc(r.code + " · " + r.title)}</h3><p>${esc(r.fact)}</p><p><strong>Ocena:</strong> ${esc(r.analysis)}</p><p><strong>Pewność:</strong> ${esc(r.confidence)}</p><p class="ref">${esc(refNames(p, "sources", r.sources))}</p>`,
-    )
-    .join(
-      "",
-    )}<h2>Wnioski</h2><p>${esc(p.report.conclusions || "Nie sformułowano.")}</p><h2>Ograniczenia</h2><p>${esc(p.report.limitations || "Nie opisano.")}</p>${p.report.sections.map((s) => `<h2>${esc(s.title)}</h2><p>${esc(s.text)}</p>`).join("")}<hr><h2>Źródła</h2>${active(
-    p,
-    "sources",
-  )
-    .map(
-      (r) =>
-        `<p class="ref">${esc(r.code + " · " + r.title)}<br>${esc(r.url || "")}<br>Dostęp: ${esc(r.accessed || "brak")}</p>`,
-    )
-    .join("")}</article>`;
-}
 function pdfOptions() {
   const p = project();
   show(
-    `<form id="pdf-form"><h2>Eksport raportu PDF</h2><p class="muted">Wykryto ${checks(p).length} uwag kontroli jakości. Eksport nie zastępuje weryfikacji.</p>${select("mode", "Zakres", ["Pełny — z materiałami wewnętrznymi", "Publiczny — bez oznaczonych wewnętrznych"], "Pełny — z materiałami wewnętrznymi")}<label class="check"><input name="reviewed" type="checkbox" required>Sprawdzę treść i dane osobowe przed udostępnieniem.</label><p class="muted">Wariant publiczny usuwa całe oznaczone rekordy. Nie wykrywa wszystkich nazw i danych w tekście. Oryginalnych załączników binarnych nie osadzamy w PDF; raport zawiera ich wykaz i wybrane obrazy.</p><div class="actions">${btn("close", "Anuluj")}<button class="primary" type="submit">Pobierz PDF i manifest</button></div></form>`,
+    `<form id="pdf-form"><h2>Eksport raportu</h2>${select("format", "Format pliku", ["PDF", "ODT"], "PDF")}<p class="muted">Wykryto ${checks(p).length} uwag kontroli jakości. Eksport nie zastępuje weryfikacji.</p>${select("mode", "Zakres", ["Pełny — z materiałami wewnętrznymi", "Publiczny — bez oznaczonych wewnętrznych"], "Pełny — z materiałami wewnętrznymi")}<label class="check"><input name="reviewed" type="checkbox" required>Sprawdzę treść i dane osobowe przed udostępnieniem.</label><p class="muted">Wariant publiczny usuwa całe oznaczone rekordy. Nie wykrywa wszystkich nazw i danych w tekście. Raport zawiera wykaz materiałów i wybrane obrazy. ODT pozwala edytować treść; podział stron może różnić się od PDF.</p><div class="actions">${btn("close", "Anuluj")}<button class="primary" type="submit">Pobierz raport i manifest</button></div></form>`,
   );
   $("#pdf-form").onsubmit = async (e) => {
     e.preventDefault();
     const mode = new FormData(e.target).get("mode");
+    const format = new FormData(e.target).get("format") === "ODT" ? "ODT" : "PDF";
     const button = e.target.querySelector("button[type=submit]");
     button.disabled = true;
     button.textContent = "Składanie raportu…";
@@ -524,16 +516,16 @@ function pdfOptions() {
       const exported = mode.startsWith("Publiczny")
         ? publicProject(p)
         : structuredClone(p);
-      const bytes = await makePDF(exported);
+      const bytes = format === "ODT" ? await makeODT(exported) : await makePDF(exported);
       const hash = await sha256(bytes);
       const name =
-        "Raport-OSINT-" +
+        "Raport-" +
         p.title
           .replace(/[^a-zA-Z0-9ąęćłńóśźżĄĘĆŁŃÓŚŹŻ_-]+/g, "-")
           .slice(0, 65) +
         "-" +
         new Date().toISOString().slice(0, 10);
-      download(bytes, name + ".pdf", "application/pdf");
+      download(bytes, name + "." + format.toLowerCase(), format === "ODT" ? ODT_MIME : "application/pdf");
       download(
         JSON.stringify(
           {
@@ -542,6 +534,7 @@ function pdfOptions() {
             title: exported.title,
             exported: now(),
             reportSHA256: hash,
+            reportFormat: format,
             mode,
             materials: active(exported, "materials").map(
               ({ code, filename, hash, size }) => ({
@@ -558,9 +551,9 @@ function pdfOptions() {
         name + "-manifest.json",
         "application/json",
       );
-      await persist("Wygenerowano raport PDF: " + mode);
+      await persist("Wygenerowano raport " + format + ": " + mode);
       close();
-      toast("Pobrano PDF i manifest SHA-256.");
+      toast("Pobrano " + format + " i manifest SHA-256.");
     } catch (e) {
       error(e);
       button.disabled = false;
@@ -848,18 +841,13 @@ function bindEditor() {
   const p = project();
   if (!p) return;
   if (view === "report") {
-    for (const key of [
-      "summary",
-      "method",
-      "conclusions",
-      "limitations",
-      "template",
-    ]) {
+    for (const key of [...REPORT_FIELDS.map(([key]) => key), "template"]) {
+      const target = Object.hasOwn(PROJECT_DEFAULTS, key) ? p : p.report;
       const el = $("#f-" + key);
       if (el) {
         const save = async () => {
           clearTimeout(reportSaveTimer);
-          p.report[key] = el.value;
+          target[key] = el.value;
           try {
             await persist("Zmieniono sekcję raportu: " + key);
             reportUnsaved = false;
@@ -869,7 +857,7 @@ function bindEditor() {
           }
         };
         el.oninput = () => {
-          p.report[key] = el.value;
+          target[key] = el.value;
           reportUnsaved = true;
           const label = $("#save-state");
           if (label) label.textContent = "Zapisywanie…";
@@ -1005,12 +993,20 @@ document.addEventListener("click", async (e) => {
     if (action === "redact") return await redact(id);
     if (action === "graph-download")
       return download(graphSVG(p), "powiazania.svg", "image/svg+xml");
+    if (action === "fill-report-defaults") {
+      fillReportDefaults(p);
+      await persist("Uzupełniono puste pola raportu wzorem");
+      render();
+      toast("Uzupełniono puste pola. Dotychczasowe treści zachowano.");
+      return;
+    }
+    if (action === "fraud-preset") return fraudPresetForm(p);
     if (action === "preview-report") {
-      show(
-        '<h2>Podgląd treści głównych</h2><p class="muted">Pełny PDF zawiera również rejestry, graf i wykaz materiałów zgodnie z wybranym szablonem.</p>' +
-          preview(p) +
-          btn("close", "Zamknij"),
-      );
+      await persist();
+      const bytes = await makePDF(structuredClone(p));
+      if (pdfURL) URL.revokeObjectURL(pdfURL);
+      pdfURL = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+      show(`<h2>Podgląd raportu</h2><p>Pełny zakres, łącznie z materiałami wewnętrznymi.</p><iframe title="Podgląd raportu PDF" src="${pdfURL}" style="width:100%;height:70vh;border:0"></iframe><a href="${pdfURL}" target="_blank" rel="noopener">Otwórz PDF w nowej karcie</a>${btn("close", "Zamknij")}`);
       return;
     }
     if (action === "pdf-options") return pdfOptions();

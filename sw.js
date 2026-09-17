@@ -1,4 +1,4 @@
-const CACHE = "argus-shell-v1.0.2-neutral-report";
+const CACHE = "argus-shell-v1.4.0-flow-fraud-presets";
 const FILES = [
   "./",
   "./index.html",
@@ -6,6 +6,10 @@ const FILES = [
   "./app.js",
   "./core.js",
   "./report.js",
+  "./odt.js",
+  "./report-template.js",
+  "./report-defaults.js",
+  "./fraud-presets.js",
   "./manifest.webmanifest",
   "./icon.svg",
   "./icon-192.png",

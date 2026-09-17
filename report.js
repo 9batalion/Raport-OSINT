@@ -1,3 +1,4 @@
+import { REPORT } from "./report-template.js";
 import { active, esc, refNames, safeUrl, unb64 } from "./core.js";
 export function graphSVG(p) {
   const entities = active(p, "entities"),
@@ -166,9 +167,11 @@ export async function makePDF(p) {
     y -= gap;
   }
   function heading(title) {
-    need(70);
+    // Keep the heading and the beginning of its content together; otherwise flow.
+    need(lines(title, 15, heavy).length * 24 + 65);
+    if (toc.length) y -= 10;
     toc.push({ title, page: doc.getPageCount() });
-    write(title, { size: 17, f: heavy, color: blue, gap: 12 });
+    write(title, { size: 15, f: heavy, color: blue, gap: 9 });
   }
   function sub(title) {
     need(65);
@@ -192,62 +195,36 @@ export async function makePDF(p) {
     y -= 18;
   }
   newPage();
-  page.drawRectangle({
-    x: 0,
-    y: height - 210,
-    width,
-    height: 210,
-    color: navy,
-  });
-  page.drawText("RAPORT OSINT", {
-    x: left,
-    y: height - 66,
-    font: heavy,
-    size: 13,
-    color: rgb(0.67, 0.79, 1),
-  });
-  page.drawText(clean(p.report.template), {
-    x: left,
-    y: height - 108,
-    font,
-    size: 11,
-    color: rgb(0.85, 0.9, 0.96),
-  });
-  y = height - 275;
-  const coverTitle = lines(p.title, 27, heavy);
-  write(coverTitle.slice(0, 3).join("\n"), { size: 27, f: heavy, gap: 24 });
-  const coverGoal = lines(p.goal || "Raport analityczny", 12);
-  write(coverGoal.slice(0, 3).join("\n"), { size: 12, color: gray, gap: 18 });
+  y = height - 100;
+  write(REPORT.title, { size: 27, f: heavy, gap: 14 });
+  write(REPORT.subtitle, { size: 12, color: gray, gap: 36 });
+  write(p.title, { size: 20, f: heavy, gap: 24 });
   rule();
-  pair("Autor", (p.author || "Nie wskazano").slice(0, 90));
-  pair("Wygenerowano (UTC)", new Date().toISOString());
+  pair("Numer sprawy / sygnatura", p.caseNumber || "Nie wskazano");
+  pair("Autor", p.author || "Nie wskazano");
+  pair("Data i miejsce sporządzenia", p.reportDate || "Nie wskazano");
+  pair("Okres objęty raportem", p.period || "Nie wskazano");
+  pair("Wersja", p.reportVersion || "1.0");
   pair("Oznaczenie", p.classification);
+  pair("Wygenerowano (UTC)", new Date().toISOString());
   pair("Identyfikator projektu", p.id);
-  y = Math.min(y, 190);
-  write("Fakty • źródła • ocena analityczna", {
-    size: 12,
-    f: heavy,
-    color: blue,
-  });
-  write(
-    "Raport odzwierciedla stan materiałów w chwili eksportu. Skróty plików pozwalają sprawdzić ich integralność, lecz nie potwierdzają autentyczności ani prawdziwości treści.",
-    { size: 9, color: gray },
-  );
+  rule();
+  write(REPORT.notice, { size: 9, color: gray });
   newPage();
-  const tocPage = page;
   newPage();
-  heading("01 / Cel i metodologia");
+  heading(REPORT.sections[0]);
   pair("Cel", p.goal);
-  pair("Pytania badawcze", p.questions);
+  pair("Pytania do wyjaśnienia", p.questions);
   pair("Zakres", p.scope);
-  pair("Metodologia", p.report.method);
-  heading("02 / Streszczenie");
+  pair("Metodyka", p.report.method);
+  heading(REPORT.sections[1]);
   write(p.report.summary || "Nie uzupełniono.");
   const compact = ["Raport skrócony", "Notatka analityczna"].includes(
     p.report.template,
   );
   if (!compact) {
-    heading("03 / Podmioty");
+    heading(REPORT.sections[2]);
+  if (p.report.entitiesIntro) write(p.report.entitiesIntro);
     for (const r of active(p, "entities")) {
       sub(r.code + " · " + r.title);
       pair("Rodzaj", r.type);
@@ -258,7 +235,8 @@ export async function makePDF(p) {
     }
     if (!active(p, "entities").length) write("Nie dodano podmiotów.");
   }
-  heading("04 / Ustalenia");
+  heading(REPORT.sections[3]);
+  if (p.report.findingsIntro) write(p.report.findingsIntro);
   for (const r of active(p, "findings")) {
     sub(r.code + " · " + r.title);
     write(r.fact || "");
@@ -273,9 +251,16 @@ export async function makePDF(p) {
   }
   if (!active(p, "findings").length) write("Nie dodano ustaleń.");
   if (!compact) {
-    heading("05 / Relacje");
+    heading(REPORT.sections[4]);
+  if (p.report.relationsIntro) write(p.report.relationsIntro);
     if (p.report.includeGraph && active(p, "entities").length) {
-      const img = await doc.embedPng(await svgPNG(graphSVG(p)));
+      const printGraph = graphSVG(p)
+        .replaceAll("#121c2d", "#f7f9fb")
+        .replaceAll("#243b5f", "#e1e7ef")
+        .replaceAll("#ffffff", "#172640")
+        .replaceAll("#eaf1fb", "#172640")
+        .replaceAll("#e6b16d", "#57667d");
+      const img = await doc.embedPng(await svgPNG(printGraph));
       const ratio = Math.min(bodyWidth / img.width, 330 / img.height);
       const h = img.height * ratio;
       need(h + 30);
@@ -303,7 +288,9 @@ export async function makePDF(p) {
       pair("Opis", r.notes);
       sourceRefs(r.sources);
     }
-    heading("06 / Chronologia");
+    if (!active(p, "relations").length) write("Nie dodano powiązań.");
+    heading(REPORT.sections[5]);
+  if (p.report.chronologyIntro) write(p.report.chronologyIntro);
     for (const r of active(p, "events").sort((a, b) =>
       (a.date || "9999").localeCompare(b.date || "9999"),
     )) {
@@ -317,7 +304,9 @@ export async function makePDF(p) {
       write(r.notes || "");
       sourceRefs(r.sources);
     }
-    heading("07 / Hipotezy");
+    if (!active(p, "events").length) write("Nie dodano zdarzeń.");
+    heading(REPORT.sections[6]);
+  if (p.report.hypothesesIntro) write(p.report.hypothesesIntro);
     for (const r of active(p, "hypotheses")) {
       sub(r.code + " · " + r.title);
       pair("Status", r.status);
@@ -329,22 +318,26 @@ export async function makePDF(p) {
       rule();
     }
   }
-  heading("08 / Wnioski i ograniczenia");
+  heading(REPORT.sections[7]);
   sub("Wnioski");
   write(p.report.conclusions || "Nie sformułowano.");
   sub("Ograniczenia");
   write(p.report.limitations || "Nie opisano.");
+  sub("Dalsze czynności");
+  write(p.report.nextSteps || "Nie wskazano.");
   for (const s of p.report.sections) {
     heading(s.title);
     write(s.text);
     sourceRefs(s.sources);
   }
-  heading("09 / Wykaz źródeł");
+  heading(REPORT.sections[8]);
+  if (p.report.sourcesIntro) write(p.report.sourcesIntro);
+  if (!active(p, "sources").length) write("Nie dodano źródeł.");
   for (const r of active(p, "sources")) {
     sub(r.code + " · " + r.title);
     pair("Autor / wydawca", r.author);
     pair("Data publikacji", r.published);
-    pair("Data dostępu (UTC)", r.accessed);
+    pair("Data dostępu (strefa wg źródła)", r.accessed);
     pair("Typ", r.type);
     pair("Wiarygodność", r.reliability);
     pair("Niezależność", r.independence);
@@ -354,7 +347,9 @@ export async function makePDF(p) {
     pair("Uwagi", r.notes);
     rule();
   }
-  heading("10 / Wykaz materiałów");
+  heading(REPORT.sections[9]);
+  if (p.report.materialsIntro) write(p.report.materialsIntro);
+  if (!active(p, "materials").length) write("Nie dodano materiałów.");
   for (const r of active(p, "materials")) {
     sub(r.code + " · " + r.title);
     pair("Plik", r.filename);
@@ -405,6 +400,12 @@ export async function makePDF(p) {
     }
     rule();
   }
+  heading(REPORT.sections[10]);
+  if (p.report.closingIntro) write(p.report.closingIntro);
+  pair("Data i miejsce", p.reportDate || "Nie wskazano");
+  pair("Sporządził(a)", p.author || "Nie wskazano");
+  pair("Weryfikacja / akceptacja", p.report.review || "Nie wskazano");
+  write("Podpis: ........................................................", { gap: 20 });
   // Fill the reserved contents page; overflow gets its own page after the cover.
   const tocLines = toc.flatMap((t) =>
     lines(t.title, 10, font, bodyWidth - 40).map((line, i) => ({
@@ -439,6 +440,9 @@ export async function makePDF(p) {
   }
   const pages = doc.getPages();
   pages.forEach((pg, i) => {
+    // Subtle margin background, outside the text area, also on overflow pages.
+    pg.drawRectangle({ x: 20, y: 62, width: 5, height: height - 124, color: rgb(0.94, 0.95, 0.96) });
+    pg.drawLine({ start: { x: left, y: height - 45 }, end: { x: right, y: height - 45 }, thickness: 1, color: light });
     if (i > 0) {
       pg.drawText(clean(p.classification), {
         x: left,
@@ -460,7 +464,7 @@ export async function makePDF(p) {
       thickness: 0.5,
       color: light,
     });
-    pg.drawText("Raport OSINT · " + clean(p.id.slice(0, 8)), {
+    pg.drawText("Raport z ustaleń · " + clean(p.id.slice(0, 8)), {
       x: left,
       y: 28,
       size: 8,
@@ -477,8 +481,8 @@ export async function makePDF(p) {
   });
   doc.setTitle(p.title);
   doc.setAuthor(p.author || "");
-  doc.setSubject("Raport OSINT — " + p.classification);
-  doc.setCreator("Generator raportów OSINT");
+  doc.setSubject("Raport z ustaleń — " + p.classification);
+  doc.setCreator("Generator raportów");
   doc.setProducer("pdf-lib");
   return doc.save();
 }

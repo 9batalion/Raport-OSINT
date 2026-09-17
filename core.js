@@ -1,3 +1,4 @@
+import { fillReportDefaults, REPORT_DEFAULTS } from "./report-defaults.js";
 export const VERSION = 1;
 export const uid = () => crypto.randomUUID();
 export const now = () => new Date().toISOString();
@@ -154,10 +155,14 @@ export const schema = {
   ],
 };
 export function newProject(title = "Nowe dochodzenie") {
-  return {
+  return fillReportDefaults({
     id: uid(),
     title,
     author: "",
+    caseNumber: "",
+    reportDate: "",
+    period: "",
+    reportVersion: "1.0",
     goal: "",
     questions: "",
     scope: "",
@@ -165,11 +170,13 @@ export function newProject(title = "Nowe dochodzenie") {
     created: now(),
     updated: now(),
     report: {
-      template: "Raport pełny OSINT",
+      template: "Raport uniwersalny",
       summary: "",
       method:
-        "Analiza materiałów ze źródeł jawnych. Oceny analityczne oddzielono od obserwacji. Daty dostępu i ograniczenia źródeł wskazano w rejestrze źródeł.",
+        "",
       conclusions: "",
+      nextSteps: "",
+      review: "",
       limitations: "",
       sections: [],
       includeGraph: true,
@@ -179,7 +186,7 @@ export function newProject(title = "Nowe dochodzenie") {
     audit: [],
     trash: [],
     snapshots: [],
-  };
+  });
 }
 export function active(p, key) {
   return (p[key] || []).filter((x) => !x.deleted);
@@ -418,16 +425,24 @@ export function validateProject(p) {
     "questions",
     "scope",
     "classification",
+    "caseNumber",
+    "reportDate",
+    "period",
+    "reportVersion",
     "created",
     "updated",
   ])
     if (p[key] !== undefined && typeof p[key] !== "string") fail();
   for (const key of [
     "template",
+    "preset",
     "summary",
     "method",
     "conclusions",
+    ...Object.keys(REPORT_DEFAULTS),
     "limitations",
+    "nextSteps",
+    "review",
   ])
     if (p.report[key] !== undefined && typeof p.report[key] !== "string")
       fail();
