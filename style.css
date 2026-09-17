@@ -210,6 +210,28 @@ p {
   display: grid;
   gap: 4px;
 }
+.nav-label {
+  margin: 14px 8px 5px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.chapter-progress {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 15px;
+}
+.chapter-navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 26px 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+.chapter-navigation button { white-space: normal; text-align: left; }
 .nav button {
   background: transparent;
   border-color: transparent;

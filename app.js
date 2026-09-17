@@ -1,3 +1,4 @@
+import { REPORT_STEPS, adjacentSteps } from "./workflow.js";
 import {
   uid,
   now,
@@ -42,19 +43,20 @@ const $ = (s) => document.querySelector(s),
   dialog = $("#dialog");
 const nav = [
   ["overview", "Pulpit"],
-  ["sources", "Źródła"],
-  ["materials", "Materiały"],
-  ["entities", "Podmioty"],
-  ["findings", "Ustalenia"],
-  ["relations", "Relacje i graf"],
-  ["events", "Oś czasu"],
-  ["hypotheses", "Hipotezy"],
-  ["tasks", "Zadania"],
-  ["report", "Raport"],
+  ...REPORT_STEPS.map(s => [s.id, s.title]),
+  ["report", "Cały raport i eksport"],
   ["quality", "Kontrola jakości"],
+  ["tasks", "Zadania"],
   ["tools", "Warsztat OSINT"],
   ["backup", "Kopie i historia"],
 ];
+function navigation() {
+  const link=(id,title)=>`<button type="button" data-view="${id}" class="${view===id?'active':''}" ${view===id?'aria-current="page"':''}>${esc(title)}</button>`;
+  return link("overview","Pulpit") + '<div class="nav-label">Rozdziały raportu</div>' +
+    REPORT_STEPS.map(s=>link(s.id,s.title)).join('') + '<div class="nav-label">Sprawdzenie i eksport</div>' +
+    link("quality","Kontrola jakości") + link("report","Cały raport i eksport") + '<div class="nav-label">Narzędzia</div>' +
+    link("tasks","Zadania") + link("tools","Warsztat OSINT") + link("backup","Kopie i historia");
+}
 let toastTimer;
 function toast(t) {
   $("#toast").textContent = t;
@@ -141,7 +143,7 @@ function render() {
   document.body.classList.toggle("light", state.theme === "light");
   const p = project();
   $("#app").innerHTML =
-    `<div class="shell"><aside class="sidebar"><div class="brand"><img src="./icon.svg" alt=""><div><strong>ARGUS</strong><small>OSINT STUDIO</small></div></div><div><label class="eyebrow" for="project-select">Aktywny projekt</label><select id="project-select">${state.projects.map((p) => `<option value="${p.id}" ${p.id === state.current ? "selected" : ""}>${esc(p.title)}</option>`).join("") || "<option>Brak projektów</option>"}</select><div class="actions" style="margin-top:10px">${btn("new-project", "+ Projekt")}${btn("import", "Import")}</div></div><nav class="nav" aria-label="Nawigacja projektu">${nav.map(([id, title], i) => `<button data-view="${id}" class="${view === id ? "active" : ""}"><b>${String(i + 1).padStart(2, "0")}</b>${title}</button>`).join("")}</nav><div class="sidebar-foot">Twoje dane. Twoje urządzenie.<br>Bez konta i bez telemetrii.<div class="actions" style="margin-top:12px">${btn("theme", state.theme === "light" ? "Ciemny motyw" : "Jasny motyw")}${btn("install", "Instalacja PWA")}</div></div></aside><div class="work"><header class="topbar">${btn("menu", "☰", "mobile-menu", 'aria-label="Otwórz nawigację"')}<span class="brand-name">Warsztat analityczny <span class="muted">/ ${esc(nav.find((n) => n[0] === view)?.[1] || "")}</span></span><input id="search" type="search" aria-label="Filtruj aktualną listę" placeholder="Szukaj na bieżącej liście…" value="${esc(query)}"><span class="status" id="save-state">${navigator.onLine ? "Online" : "Offline"} · dane lokalne</span></header><main id="main" class="page">${p ? content() : welcome()}</main></div></div>`;
+    `<div class="shell"><aside class="sidebar"><div class="brand"><img src="./icon.svg" alt=""><div><strong>ARGUS</strong><small>OSINT STUDIO</small></div></div><div><label class="eyebrow" for="project-select">Aktywny projekt</label><select id="project-select">${state.projects.map((p) => `<option value="${p.id}" ${p.id === state.current ? "selected" : ""}>${esc(p.title)}</option>`).join("") || "<option>Brak projektów</option>"}</select><div class="actions" style="margin-top:10px">${btn("new-project", "+ Projekt")}${btn("import", "Import")}</div></div><nav class="nav" aria-label="Nawigacja projektu">${navigation()}</nav><div class="sidebar-foot">Twoje dane. Twoje urządzenie.<br>Bez konta i bez telemetrii.<div class="actions" style="margin-top:12px">${btn("theme", state.theme === "light" ? "Ciemny motyw" : "Jasny motyw")}${btn("install", "Instalacja PWA")}</div></div></aside><div class="work"><header class="topbar">${btn("menu", "☰", "mobile-menu", 'aria-label="Otwórz nawigację"')}<span class="brand-name">Warsztat analityczny <span class="muted">/ ${esc(nav.find((n) => n[0] === view)?.[1] || "")}</span></span><input id="search" type="search" aria-label="Filtruj aktualną listę" placeholder="Szukaj na bieżącej liście…" value="${esc(query)}"><span class="status" id="save-state">${navigator.onLine ? "Online" : "Offline"} · dane lokalne</span></header><main id="main" class="page">${p ? content() : welcome()}</main></div></div>`;
   bindMain();
 }
 function welcome() {
@@ -156,6 +158,8 @@ function welcome() {
 function content() {
   const p = project();
   if (view === "overview") return overview(p);
+  const chapter = REPORT_STEPS.find(s => s.id === view);
+  if (chapter) return chapterView(p, chapter);
   if (view === "report") return reportEditor(p);
   if (view === "quality") return quality(p);
   if (view === "tools") return toolsView();
@@ -163,6 +167,28 @@ function content() {
   if (view === "materials") return materials(p);
   if (collections.includes(view)) return collectionView(p, view);
   return "";
+}
+function chapterView(p, chapter) {
+  const {previous,next}=adjacentSteps(chapter.id);
+  const stepLink=(target,label)=>`<button type="button" data-view="${target}">${esc(label)}</button>`;
+  const progress=`<div class="chapter-progress">Krok ${REPORT_STEPS.indexOf(chapter)+1} z ${REPORT_STEPS.length} · Układ zgodny ze spisem treści</div>`;
+  const controls=`<div class="chapter-navigation">${previous?stepLink(previous.id,'← '+previous.title):stepLink('overview','← Pulpit')}${next?stepLink(next.id,'Dalej: '+next.title+' →'):stepLink('quality','Dalej: Kontrola jakości →')}</div>`;
+  const fields=chapter.fields.map(key=>{
+    const label=REPORT_FIELDS.find(([k])=>k===key)?.[1] || key;
+    return field(key,label,'textarea',Object.hasOwn(PROJECT_DEFAULTS,key)?p[key]:p.report[key]);
+  }).join('');
+  const intro=fields?`<section class="card"><h2>${chapter.register?'Wprowadzenie do rozdziału':'Treść rozdziału'}</h2><p class="muted">Edytuj treść wzoru i uzupełnij miejsca w nawiasach. Zmiany zapisują się automatycznie.</p>${fields}</section>`:'';
+  let body;
+  if(chapter.register) {
+    body=chapter.register==='materials'?materials(p,intro):collectionView(p,chapter.register,intro);
+  } else {
+    let actions='';
+    if(chapter.id==='purpose') actions=btn('edit-project','Metryka sprawy')+btn('fraud-preset','Wybierz preset (20)');
+    if(chapter.id==='closing') actions=btn('preview-report','Podgląd PDF')+btn('pdf-options','Generuj PDF / ODT','primary');
+    body=head(esc(chapter.title),'Przejdź przez rozdziały w kolejności raportu.',actions)+intro;
+    if(chapter.id==='custom-chapters') body+=customChapters(p);
+  }
+  return progress+body+controls;
 }
 function overview(p) {
   const issues = checks(p),
@@ -174,7 +200,7 @@ function overview(p) {
       "Przegląd dochodzenia",
       "Źródła, które możesz wskazać. Wnioski, które możesz uzasadnić.",
       btn("edit-project", "Ustawienia projektu") +
-        btn("go-report", "Otwórz raport", "primary"),
+        '<button type="button" data-view="purpose" class="primary">Rozpocznij od 01 / Cel, zakres i metodyka</button>',
     ) +
     `<div class="metrics">${[
       ["Źródła", active(p, "sources").length],
@@ -209,8 +235,8 @@ function overview(p) {
       .join("")}</section></div></div>`
   );
 }
-function collectionView(p, key) {
-  let title = labels[key];
+function collectionView(p, key, introduction = "") {
+  let title = REPORT_STEPS.find(s=>s.id===key)?.title || labels[key];
   let body = rows(key);
   if (key === "events")
     body.sort((a, b) => (a.date || "9999").localeCompare(b.date || "9999"));
@@ -220,11 +246,12 @@ function collectionView(p, key) {
       `Rejestr projektu · ${body.length} elementów`,
       btn(
         "add",
-        `+ Dodaj: ${title.toLowerCase()}`,
+        `+ Dodaj: ${labels[key].toLowerCase()}`,
         "primary",
         `data-key="${key}"`,
       ),
     ) +
+    introduction +
     (key === "relations"
       ? `<section class="card"><div class="card-head"><h2>Mapa powiązań</h2>${btn("graph-download", "Pobierz SVG")}</div><p class="muted">Kliknij podmiot, aby otworzyć jego kartę. Połączenie nie oznacza winy ani tożsamości.</p><div class="graphbox">${graphSVG(p)}</div></section>`
       : "") +
@@ -338,20 +365,21 @@ function projectForm(edit = false) {
     if (!edit) {
       state.projects.push(p);
       state.current = p.id;
-      view = "overview";
+      view = "purpose";
     }
     await persist(edit ? "Zmieniono kartę projektu" : "Utworzono projekt");
     close();
     render();
   };
 }
-function materials(p) {
+function materials(p, introduction = "") {
   return (
     head(
-      "Magazyn materiałów",
+      "10 / Wykaz materiałów i załączniki",
       "Oryginały, metadane i skróty SHA-256. Maks. 15 MB na plik.",
       btn("upload", "+ Dodaj pliki", "primary"),
     ) +
+    introduction +
     `<div class="notice">Skrót potwierdza zgodność bajtów, nie autentyczność treści ani datę jej powstania. HTML jest pobierany jako plik — nigdy wykonywany w aplikacji.</div><div class="library-grid">${
       rows("materials")
         .map(
@@ -444,8 +472,11 @@ function reportEditor(p) {
       )
       .join(
         "",
-      )}<label class="check"><input id="includeGraph" type="checkbox" ${p.report.includeGraph ? "checked" : ""}>Dołącz graf powiązań</label><label class="check"><input id="includeImages" type="checkbox" ${p.report.includeImages ? "checked" : ""}>Dołącz obrazy z magazynu materiałów</label></section><section class="card"><div class="card-head"><h2>Własne rozdziały</h2>${btn("add-section", "+ Rozdział")}</div><p class="muted">Rozdziały pojawią się po części analitycznej, przed wykazem źródeł.</p>${p.report.sections.map((s, i) => `<article class="record"><div class="card-head"><h3>${esc(s.title)}</h3>${s.private ? badge("WEWNĘTRZNY", "warn") : ""}</div><p>${esc(s.text)}</p><small>${esc(refNames(p, "sources", s.sources))}</small><div class="actions">${btn("edit-section", "Edytuj", "", `data-id="${s.id}"`)}${btn("section-up", "↑", "", `aria-label="Rozdział w górę" data-id="${s.id}" ${i === 0 ? "disabled" : ""}`)}${btn("section-down", "↓", "", `aria-label="Rozdział w dół" data-id="${s.id}" ${i === p.report.sections.length - 1 ? "disabled" : ""}`)}${btn("delete-section", "Usuń", "danger", `data-id="${s.id}"`)}</div></article>`).join("")}</section>`
+      )}<label class="check"><input id="includeGraph" type="checkbox" ${p.report.includeGraph ? "checked" : ""}>Dołącz graf powiązań</label><label class="check"><input id="includeImages" type="checkbox" ${p.report.includeImages ? "checked" : ""}>Dołącz obrazy z magazynu materiałów</label></section>${customChapters(p)}`
   );
+}
+function customChapters(p) {
+  return `<section class="card"><div class="card-head"><h2>Własne rozdziały</h2>${btn("add-section", "+ Rozdział")}</div><p class="muted">Rozdziały pojawią się po części analitycznej, przed wykazem źródeł.</p>${p.report.sections.map((s, i) => `<article class="record"><div class="card-head"><h3>${esc(s.title)}</h3>${s.private ? badge("WEWNĘTRZNY", "warn") : ""}</div><p>${esc(s.text)}</p><small>${esc(refNames(p, "sources", s.sources))}</small><div class="actions">${btn("edit-section", "Edytuj", "", `data-id="${s.id}"`)}${btn("section-up", "↑", "", `aria-label="Rozdział w górę" data-id="${s.id}" ${i === 0 ? "disabled" : ""}`)}${btn("section-down", "↓", "", `aria-label="Rozdział w dół" data-id="${s.id}" ${i === p.report.sections.length - 1 ? "disabled" : ""}`)}${btn("delete-section", "Usuń", "danger", `data-id="${s.id}"`)}</div></article>`).join("")}</section>`;
 }
 function fraudPresetForm(p) {
   show(`<form id="fraud-preset-form"><h2>Preset analizy oszustwa</h2><p>Wybierz scenariusz jako punkt wyjścia. Preset uzupełni puste pola i zastąpi niezmieniony tekst wzoru lub poprzedniego presetu. Twoje własne opisy i rejestry pozostaną zachowane.</p><label>Typ scenariusza<select id="fraud-preset-id">${FRAUD_PRESETS.map(x=>`<option value="${x.id}" ${p.report.preset===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select></label><div id="fraud-preset-preview" class="card"></div>${formFooter("Zastosuj preset")}</form>`);
@@ -840,7 +871,7 @@ function bindMain() {
 function bindEditor() {
   const p = project();
   if (!p) return;
-  if (view === "report") {
+  if (view === "report" || REPORT_STEPS.some(s=>s.id===view)) {
     for (const key of [...REPORT_FIELDS.map(([key]) => key), "template"]) {
       const target = Object.hasOwn(PROJECT_DEFAULTS, key) ? p : p.report;
       const el = $("#f-" + key);
@@ -906,9 +937,15 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (b.dataset.view) {
+      clearTimeout(reportSaveTimer);
+      if (project()) await persist();
+      reportUnsaved = false;
       view = b.dataset.view;
       query = "";
       render();
+      $("#main").setAttribute("tabindex", "-1");
+      $("#main").focus();
+      window.scrollTo(0, 0);
       return;
     }
     const action = b.dataset.action,
